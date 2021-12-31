@@ -4,6 +4,7 @@
 
 #include <dxgi1_6.h>
 #include <d3d12.h>
+#include <D3D12MemAlloc/D3D12MemAlloc.h>
 
 #include <array>
 
@@ -19,6 +20,7 @@ namespace d3d12_mesh_shaders {
         ID3D12Debug3* _debug_interface;
         IDXGIAdapter4* _adapter;
         ID3D12Device8* _device;
+        D3D12MA::Allocator* _allocator;
         ID3D12InfoQueue* _info_queue;
         ID3D12CommandQueue* _direct_queue;
         ID3D12CommandAllocator* _command_allocator;

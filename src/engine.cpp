@@ -50,6 +50,13 @@ namespace d3d12_mesh_shaders {
             _info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
         }
 
+        D3D12MA::ALLOCATOR_DESC allocator_desc = {
+            .pDevice = _device,
+            .pAdapter = _adapter
+        };
+
+        util::panic_if_failed(D3D12MA::CreateAllocator(&allocator_desc, &_allocator), "D3D12MA::CreateAllocator");
+
         _direct_queue = util::create_command_queue(_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
         _command_allocator = util::create_command_allocator(_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
         _command_list = util::create_command_list(_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -106,6 +113,8 @@ namespace d3d12_mesh_shaders {
         _command_list->Release();
         _command_allocator->Release();
         _direct_queue->Release();
+
+        _allocator->Release();
 
         if(_debug_mode) {
             _info_queue->Release();
