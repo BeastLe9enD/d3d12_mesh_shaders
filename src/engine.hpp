@@ -38,12 +38,20 @@ namespace d3d12_mesh_shaders {
         uint32_t _dsv_descriptor_increment_size;
         D3D12_CPU_DESCRIPTOR_HANDLE _dsv;
 
+        ID3D12DescriptorHeap* _cbv_srv_uav_descriptor_heap;
+        D3D12_CPU_DESCRIPTOR_HANDLE _cbv_srv_uav_descriptor_heap_start_cpu;
+        uint32_t _cbv_srv_uav_descriptor_increment_size;
+
         IDXGISwapChain4* _swap_chain;
         std::array<ID3D12Resource2*, _NUM_IMAGES> _swap_chain_images;
         std::array<D3D12_CPU_DESCRIPTOR_HANDLE, _NUM_IMAGES> _swap_chain_rtvs;
 
         ID3D12Resource2* _depth_texture;
         D3D12MA::Allocation* _depth_texture_allocation;
+
+        ID3D12Resource2* _constant_buffer;
+        D3D12MA::Allocation* _constant_buffer_allocation;
+        D3D12_CPU_DESCRIPTOR_HANDLE _cbv;
 
         ID3D12RootSignature* _root_signature;
         ID3D12PipelineState* _pipeline_state;
@@ -59,6 +67,9 @@ namespace d3d12_mesh_shaders {
 
         void init_depth_texture() noexcept;
         void destroy_depth_texture() noexcept;
+
+        void init_constant_buffer() noexcept;
+        void destroy_constant_buffer() noexcept;
 
         void init_mesh_shader() noexcept;
         void destroy_mesh_shader() noexcept;

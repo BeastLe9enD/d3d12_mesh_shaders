@@ -1,9 +1,9 @@
 #include "engine.hpp"
 #include "util.hpp"
 
-#include <DirectXColors.h>
-
 #include <SDL2/SDL_syswm.h>
+#include <DirectXColors.h>
+#include <glm/glm.hpp>
 
 #include <string>
 #include <iostream>
@@ -82,6 +82,10 @@ namespace d3d12_mesh_shaders {
         _dsv_descriptor_heap_start_cpu = _dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
         _dsv_descriptor_increment_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
+        _cbv_srv_uav_descriptor_heap = util::create_descriptor_heap(_device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+        _cbv_srv_uav_descriptor_heap_start_cpu = _cbv_srv_uav_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
+        _cbv_srv_uav_descriptor_increment_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
         IDXGISwapChain1* temp_swap_chain;
         util::panic_if_failed(_factory->CreateSwapChainForHwnd(_direct_queue, _hwnd, &swap_chain_desc, nullptr, nullptr, &temp_swap_chain), "IDXGIFactory7 -> CreateSwapChainForHwnd");
         util::panic_if_failed(temp_swap_chain->QueryInterface(IID_PPV_ARGS(&_swap_chain)), "IDXGISwapChain1 -> QueryInterface");
@@ -110,6 +114,7 @@ namespace d3d12_mesh_shaders {
     void engine::destroy_basic_d3d12() noexcept {
         _swap_chain->Release();
 
+        _cbv_srv_uav_descriptor_heap->Release();
         _dsv_descriptor_heap->Release();
         _rtv_descriptor_heap->Release();
 
@@ -179,9 +184,59 @@ namespace d3d12_mesh_shaders {
         _depth_texture->Release();
     }
 
+    void engine::init_constant_buffer() noexcept {
+        const auto size = sizeof(glm::mat4) * 4;
+
+        D3D12_RESOURCE_DESC resource_desc = {
+            .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+            .Width = size,
+            .Height = 1,
+            .DepthOrArraySize = 1,
+            .MipLevels = 1,
+            .Format = DXGI_FORMAT_UNKNOWN,
+            .SampleDesc = {
+                .Count = 1
+            },
+            .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
+        };
+
+        D3D12MA::ALLOCATION_DESC allocation_desc = {
+            .HeapType = D3D12_HEAP_TYPE_UPLOAD
+        };
+
+        util::panic_if_failed(_allocator->CreateResource(&allocation_desc, &resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                         &_constant_buffer_allocation, IID_PPV_ARGS(&_constant_buffer)), "D3D12MA::Allocator -> CreateResource");
+
+        D3D12_CONSTANT_BUFFER_VIEW_DESC constant_buffer_view_desc = {
+            .BufferLocation = _constant_buffer->GetGPUVirtualAddress(),
+            .SizeInBytes = size
+        };
+
+        _cbv = _cbv_srv_uav_descriptor_heap_start_cpu;
+        _device->CreateConstantBufferView(&constant_buffer_view_desc, _cbv);
+    }
+
+    void engine::destroy_constant_buffer() noexcept {
+        _constant_buffer_allocation->Release();
+        _constant_buffer->Release();
+    }
+
     void engine::init_mesh_shader() noexcept {
+        std::array<D3D12_ROOT_PARAMETER1, 1> root_parameters = {
+            D3D12_ROOT_PARAMETER1 {
+                .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+                .Descriptor = D3D12_ROOT_DESCRIPTOR1 {
+                    .Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC
+                }
+            }
+        };
+
         D3D12_VERSIONED_ROOT_SIGNATURE_DESC versioned_root_signature_desc = {
-            .Version = D3D_ROOT_SIGNATURE_VERSION_1_1
+            .Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
+            .Desc_1_1 = {
+                .NumParameters = static_cast<uint32_t>(root_parameters.size()),
+                .pParameters = root_parameters.data()
+            }
         };
 
         ID3DBlob* blob, *error_blob;
@@ -304,7 +359,21 @@ namespace d3d12_mesh_shaders {
         _command_list->RSSetViewports(1, &viewport);
         _command_list->RSSetScissorRects(1, &clear_rect);
 
+        D3D12_RANGE constant_buffer_range = {
+            .Begin = 0,
+            .End = sizeof(glm::mat4)
+        };
+
+        void* mapped_data;
+        util::panic_if_failed(_constant_buffer->Map(0, &constant_buffer_range, &mapped_data), "ID3D12Resource2 -> Map");
+
+        glm::mat4 view_projection_matrix = glm::mat4(1.0f);
+        memcpy(mapped_data, &view_projection_matrix, sizeof(view_projection_matrix));
+
+        _constant_buffer->Unmap(0, &constant_buffer_range);
+
         _command_list->SetGraphicsRootSignature(_root_signature);
+        _command_list->SetGraphicsRootConstantBufferView(0, _constant_buffer->GetGPUVirtualAddress());
         _command_list->SetPipelineState(_pipeline_state);
 
         _command_list->DispatchMesh(1, 1, 1);
@@ -316,8 +385,10 @@ namespace d3d12_mesh_shaders {
         _height = height;
 
         create_window();
+
         init_basic_d3d12();
         init_depth_texture();
+        init_constant_buffer();
 
         init_mesh_shader();
     }
@@ -330,6 +401,7 @@ namespace d3d12_mesh_shaders {
 
         destroy_mesh_shader();
 
+        destroy_constant_buffer();
         destroy_depth_texture();
         destroy_basic_d3d12();
 
