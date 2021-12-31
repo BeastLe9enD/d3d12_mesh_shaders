@@ -237,7 +237,7 @@ namespace d3d12_mesh_shaders {
 
         _command_list->SetGraphicsRootSignature(_root_signature);
         _command_list->SetPipelineState(_pipeline_state);
-        
+
         _command_list->DispatchMesh(1, 1, 1);
     }
 
