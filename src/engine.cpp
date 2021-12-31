@@ -5,6 +5,9 @@
 
 #include <SDL2/SDL_syswm.h>
 
+#include <string>
+#include <iostream>
+
 namespace d3d12_mesh_shaders {
     void engine::create_window() noexcept {
         if(SDL_Init(SDL_INIT_EVERYTHING) != 0) {
@@ -117,20 +120,21 @@ namespace d3d12_mesh_shaders {
     }
 
     void engine::init_mesh_shader() noexcept {
-        struct {
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE
-        } pipeline_state_stream;
-
-        D3D12_PIPELINE_STATE_STREAM_DESC pipeline_state_stream_desc = {
-            .SizeInBytes = sizeof(pipeline_state_stream),
-            .pPipelineStateSubobjectStream = &pipeline_state_stream
+        D3D12_VERSIONED_ROOT_SIGNATURE_DESC versioned_root_signature_desc = {
+            .Version = D3D_ROOT_SIGNATURE_VERSION_1_1
         };
 
-        util::panic_if_failed(_device->CreatePipelineState(&pipeline_state_stream_desc, IID_PPV_ARGS(&_pipeline_state)), "ID3D12Device8 -> CreatePipelineState");
+        ID3DBlob* blob, *error_blob;
+        if(FAILED(D3D12SerializeVersionedRootSignature(&versioned_root_signature_desc, &blob, &error_blob))) {
+            std::cerr << "D3D12SerializeVersionedRootSignature failed: " << (const char*)error_blob->GetBufferPointer() << std::endl;
+            std::exit(1);
+        }
+
+        util::panic_if_failed(_device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&_root_signature)), "ID3D12Device8 -> CreateRootSignature");
     }
 
     void engine::destroy_mesh_shader() noexcept {
-        _pipeline_state->Release();
+        _root_signature->Release();
     }
 
     void engine::run_frame() noexcept {
