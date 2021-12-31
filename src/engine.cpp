@@ -117,11 +117,20 @@ namespace d3d12_mesh_shaders {
     }
 
     void engine::init_mesh_shader() noexcept {
+        struct {
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE
+        } pipeline_state_stream;
 
+        D3D12_PIPELINE_STATE_STREAM_DESC pipeline_state_stream_desc = {
+            .SizeInBytes = sizeof(pipeline_state_stream),
+            .pPipelineStateSubobjectStream = &pipeline_state_stream
+        };
+
+        util::panic_if_failed(_device->CreatePipelineState(&pipeline_state_stream_desc, IID_PPV_ARGS(&_pipeline_state)), "ID3D12Device8 -> CreatePipelineState");
     }
 
     void engine::destroy_mesh_shader() noexcept {
-
+        _pipeline_state->Release();
     }
 
     void engine::run_frame() noexcept {

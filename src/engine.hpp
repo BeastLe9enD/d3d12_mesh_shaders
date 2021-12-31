@@ -35,6 +35,8 @@ namespace d3d12_mesh_shaders {
         std::array<ID3D12Resource2*, _NUM_IMAGES> _swap_chain_images;
         std::array<D3D12_CPU_DESCRIPTOR_HANDLE, _NUM_IMAGES> _swap_chain_rtvs;
 
+        ID3D12PipelineState* _pipeline_state;
+
         bool _debug_mode;
         uint32_t _width, _height;
 
