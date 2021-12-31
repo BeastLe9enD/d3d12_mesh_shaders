@@ -38,8 +38,14 @@ namespace d3d12_mesh_shaders {
         bool _debug_mode;
         uint32_t _width, _height;
 
-        void create_window(uint32_t width, uint32_t height) noexcept;
+        void create_window() noexcept;
         void destroy_window() noexcept;
+
+        void init_basic_d3d12() noexcept;
+        void destroy_basic_d3d12() noexcept;
+
+        void init_mesh_shader() noexcept;
+        void destroy_mesh_shader() noexcept;
 
         void run_frame() noexcept;
     public:
