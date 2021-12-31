@@ -51,6 +51,7 @@ namespace d3d12_mesh_shaders {
         void destroy_mesh_shader() noexcept;
 
         void run_frame() noexcept;
+        void run_frame_inner(uint32_t index) noexcept;
     public:
         engine(bool debug_mode, uint32_t width, uint32_t height) noexcept;
         ~engine() noexcept;

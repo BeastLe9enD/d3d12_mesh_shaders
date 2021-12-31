@@ -126,14 +126,53 @@ namespace d3d12_mesh_shaders {
 
         ID3DBlob* blob, *error_blob;
         if(FAILED(D3D12SerializeVersionedRootSignature(&versioned_root_signature_desc, &blob, &error_blob))) {
-            std::cerr << "D3D12SerializeVersionedRootSignature failed: " << (const char*)error_blob->GetBufferPointer() << std::endl;
+            std::cerr << "D3D12SerializeVersionedRootSignature failed: " << reinterpret_cast<const char*>(error_blob->GetBufferPointer()) << std::endl;
             std::exit(1);
         }
 
         util::panic_if_failed(_device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&_root_signature)), "ID3D12Device8 -> CreateRootSignature");
+
+        const auto amplification_shader = util::read_binary_file("meshlet_as.dxil");
+        const auto mesh_shader = util::read_binary_file("meshlet_ms.dxil");
+        const auto pixel_shader = util::read_binary_file("meshlet_ps.dxil");
+
+        struct {
+            pipeline_state_stream_subobject<ID3D12RootSignature*, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE> root_signature;
+            pipeline_state_stream_subobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS> amplification_shader;
+            pipeline_state_stream_subobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS> mesh_shader;
+            pipeline_state_stream_subobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS> pixel_shader;
+            pipeline_state_stream_subobject<D3D12_RT_FORMAT_ARRAY, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS> render_target_formats;
+        } pipeline_state_stream;
+
+        pipeline_state_stream.root_signature.value = _root_signature;
+        pipeline_state_stream.amplification_shader.value = {
+            .pShaderBytecode = amplification_shader.data(),
+            .BytecodeLength = amplification_shader.size()
+        };
+        pipeline_state_stream.mesh_shader.value = {
+            .pShaderBytecode = mesh_shader.data(),
+            .BytecodeLength = mesh_shader.size()
+        };
+        pipeline_state_stream.pixel_shader.value = {
+            .pShaderBytecode = pixel_shader.data(),
+            .BytecodeLength = pixel_shader.size()
+        };
+        pipeline_state_stream.render_target_formats.value.NumRenderTargets = 1;
+        pipeline_state_stream.render_target_formats.value.RTFormats[0] = DXGI_FORMAT_B8G8R8A8_UNORM;
+        for (auto i = 1; i < 8; i++) {
+            pipeline_state_stream.render_target_formats.value.RTFormats[i] = DXGI_FORMAT_UNKNOWN;
+        }
+
+        D3D12_PIPELINE_STATE_STREAM_DESC pipeline_state_stream_desc = {
+            .SizeInBytes = sizeof(pipeline_state_stream),
+            .pPipelineStateSubobjectStream = &pipeline_state_stream
+        };
+
+        util::panic_if_failed(_device->CreatePipelineState(&pipeline_state_stream_desc, IID_PPV_ARGS(&_pipeline_state)), "ID3D12Device8 -> CreatePipelineState");
     }
 
     void engine::destroy_mesh_shader() noexcept {
+        _pipeline_state->Release();
         _root_signature->Release();
     }
 
@@ -157,8 +196,7 @@ namespace d3d12_mesh_shaders {
 
         _command_list->ResourceBarrier(1, &resource_barrier);
 
-        D3D12_RECT clear_rect = { .right = static_cast<LONG>(_width), .bottom = static_cast<LONG>(_height) };
-        _command_list->ClearRenderTargetView(_swap_chain_rtvs[index], DirectX::Colors::CornflowerBlue, 1, &clear_rect);
+        run_frame_inner(index);
 
         resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -177,6 +215,30 @@ namespace d3d12_mesh_shaders {
         }
 
         util::panic_if_failed(_swap_chain->Present(0, 0), "IDXGISwapChain4 -> Present");
+    }
+
+    void engine::run_frame_inner(uint32_t index) noexcept {
+        D3D12_RECT clear_rect = { .right = static_cast<LONG>(_width), .bottom = static_cast<LONG>(_height) };
+        _command_list->ClearRenderTargetView(_swap_chain_rtvs[index], DirectX::Colors::CornflowerBlue, 1, &clear_rect);
+
+        _command_list->OMSetRenderTargets(1, &_swap_chain_rtvs[index], true, nullptr);
+
+        D3D12_VIEWPORT viewport = {
+            .TopLeftX = 0.0f,
+            .TopLeftY = 0.0f,
+            .Width = static_cast<float>(_width),
+            .Height = static_cast<float>(_height),
+            .MinDepth = 0.0f,
+            .MaxDepth = 1.0f
+        };
+
+        _command_list->RSSetViewports(1, &viewport);
+        _command_list->RSSetScissorRects(1, &clear_rect);
+
+        _command_list->SetGraphicsRootSignature(_root_signature);
+        _command_list->SetPipelineState(_pipeline_state);
+        
+        _command_list->DispatchMesh(1, 1, 1);
     }
 
     engine::engine(bool debug_mode, uint32_t width, uint32_t height) noexcept {

@@ -1,4 +1,6 @@
 #include "util.hpp"
+
+#include <cstdio>
 #include <iostream>
 #include <system_error>
 
@@ -60,5 +62,29 @@ namespace d3d12_mesh_shaders::util {
         ID3D12DescriptorHeap* descriptor_heap;
         panic_if_failed(device->CreateDescriptorHeap(&descriptor_heap_desc, IID_PPV_ARGS(&descriptor_heap)), "ID3D12Device8 -> CreateDescriptorHeap");
         return descriptor_heap;
+    }
+
+    std::vector<int8_t> read_binary_file(const std::string_view& path) noexcept {
+        auto* file = fopen(path.data(), "rb");
+        if(!file) {
+            panic("fopen");
+        }
+
+        fseek(file, 0, SEEK_END);
+        const auto length = ftell(file);
+        if(!length) {
+            panic("ftell");
+        }
+        fseek(file, 0, SEEK_SET);
+
+        std::vector<int8_t> buffer(length);
+        const auto length_read = fread(buffer.data(), 1, length, file);
+        if(length != length_read) {
+            panic("fread");
+        }
+
+        fclose(file);
+
+        return buffer;
     }
 }
