@@ -78,6 +78,10 @@ namespace d3d12_mesh_shaders {
         _rtv_descriptor_heap_start_cpu = _rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
         _rtv_descriptor_increment_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
+        _dsv_descriptor_heap = util::create_descriptor_heap(_device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
+        _dsv_descriptor_heap_start_cpu = _dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
+        _dsv_descriptor_increment_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
         IDXGISwapChain1* temp_swap_chain;
         util::panic_if_failed(_factory->CreateSwapChainForHwnd(_direct_queue, _hwnd, &swap_chain_desc, nullptr, nullptr, &temp_swap_chain), "IDXGIFactory7 -> CreateSwapChainForHwnd");
         util::panic_if_failed(temp_swap_chain->QueryInterface(IID_PPV_ARGS(&_swap_chain)), "IDXGISwapChain1 -> QueryInterface");
@@ -105,6 +109,8 @@ namespace d3d12_mesh_shaders {
 
     void engine::destroy_basic_d3d12() noexcept {
         _swap_chain->Release();
+
+        _dsv_descriptor_heap->Release();
         _rtv_descriptor_heap->Release();
 
         CloseHandle(_fence_event);
@@ -126,6 +132,51 @@ namespace d3d12_mesh_shaders {
             _debug_interface->Release();
         }
         _factory->Release();
+    }
+
+    void engine::init_depth_texture() noexcept {
+        D3D12_RESOURCE_DESC resource_desc = {
+            .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            .Width = _width,
+            .Height = _height,
+            .DepthOrArraySize = 1,
+            .MipLevels = 1,
+            .Format = DXGI_FORMAT_D32_FLOAT,
+            .SampleDesc = {
+                .Count = 1
+            },
+            .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        };
+
+        D3D12MA::ALLOCATION_DESC allocation_desc = {
+            .HeapType = D3D12_HEAP_TYPE_DEFAULT
+        };
+
+        D3D12_CLEAR_VALUE optimized_clear_value = {
+            .Format = DXGI_FORMAT_D32_FLOAT,
+            .DepthStencil = {
+                .Depth = 0,
+                .Stencil = 0
+            }
+        };
+
+        util::panic_if_failed(_allocator->CreateResource(&allocation_desc, &resource_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &optimized_clear_value,
+                                                         &_depth_texture_allocation, IID_PPV_ARGS(&_depth_texture)), "D3D12MA::Allocator -> CreateResource");
+
+        D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_view_desc = {
+            .Format = DXGI_FORMAT_D32_FLOAT,
+            .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+            .Texture2D = {}
+        };
+
+        _dsv = _dsv_descriptor_heap_start_cpu;
+        _device->CreateDepthStencilView(_depth_texture, &depth_stencil_view_desc, _dsv);
+    }
+
+    void engine::destroy_depth_texture() noexcept {
+        _depth_texture_allocation->Release();
+        _depth_texture->Release();
     }
 
     void engine::init_mesh_shader() noexcept {
@@ -151,6 +202,8 @@ namespace d3d12_mesh_shaders {
             pipeline_state_stream_subobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS> mesh_shader;
             pipeline_state_stream_subobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS> pixel_shader;
             pipeline_state_stream_subobject<D3D12_RT_FORMAT_ARRAY, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS> render_target_formats;
+            pipeline_state_stream_subobject<D3D12_DEPTH_STENCIL_DESC1, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1> depth_stencil;
+            pipeline_state_stream_subobject<DXGI_FORMAT, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT> depth_stencil_format;
         } pipeline_state_stream;
 
         pipeline_state_stream.root_signature.value = _root_signature;
@@ -171,6 +224,12 @@ namespace d3d12_mesh_shaders {
         for (auto i = 1; i < 8; i++) {
             pipeline_state_stream.render_target_formats.value.RTFormats[i] = DXGI_FORMAT_UNKNOWN;
         }
+        pipeline_state_stream.depth_stencil.value = {
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS
+        };
+        pipeline_state_stream.depth_stencil_format.value = DXGI_FORMAT_D32_FLOAT;
 
         D3D12_PIPELINE_STATE_STREAM_DESC pipeline_state_stream_desc = {
             .SizeInBytes = sizeof(pipeline_state_stream),
@@ -229,8 +288,9 @@ namespace d3d12_mesh_shaders {
     void engine::run_frame_inner(uint32_t index) noexcept {
         D3D12_RECT clear_rect = { .right = static_cast<LONG>(_width), .bottom = static_cast<LONG>(_height) };
         _command_list->ClearRenderTargetView(_swap_chain_rtvs[index], DirectX::Colors::CornflowerBlue, 1, &clear_rect);
+        _command_list->ClearDepthStencilView(_dsv, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 1, &clear_rect);
 
-        _command_list->OMSetRenderTargets(1, &_swap_chain_rtvs[index], true, nullptr);
+        _command_list->OMSetRenderTargets(1, &_swap_chain_rtvs[index], true, &_dsv);
 
         D3D12_VIEWPORT viewport = {
             .TopLeftX = 0.0f,
@@ -257,6 +317,8 @@ namespace d3d12_mesh_shaders {
 
         create_window();
         init_basic_d3d12();
+        init_depth_texture();
+
         init_mesh_shader();
     }
 
@@ -267,6 +329,8 @@ namespace d3d12_mesh_shaders {
         }
 
         destroy_mesh_shader();
+
+        destroy_depth_texture();
         destroy_basic_d3d12();
 
         destroy_window();
