@@ -3,7 +3,6 @@
 
 #include <SDL2/SDL_syswm.h>
 #include <DirectXColors.h>
-#include <glm/glm.hpp>
 
 #include <string>
 #include <iostream>
@@ -341,6 +340,8 @@ namespace d3d12_mesh_shaders {
     }
 
     void engine::run_frame_inner(uint32_t index) noexcept {
+        _camera.update(0.001f, _width, _height);
+
         D3D12_RECT clear_rect = { .right = static_cast<LONG>(_width), .bottom = static_cast<LONG>(_height) };
         _command_list->ClearRenderTargetView(_swap_chain_rtvs[index], DirectX::Colors::CornflowerBlue, 1, &clear_rect);
         _command_list->ClearDepthStencilView(_dsv, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 1, &clear_rect);
@@ -367,8 +368,8 @@ namespace d3d12_mesh_shaders {
         void* mapped_data;
         util::panic_if_failed(_constant_buffer->Map(0, &constant_buffer_range, &mapped_data), "ID3D12Resource2 -> Map");
 
-        glm::mat4 view_projection_matrix = glm::mat4(1.0f);
-        memcpy(mapped_data, &view_projection_matrix, sizeof(view_projection_matrix));
+        const auto view_projection_matrix = _camera.get_view_projection_matrix();
+        memcpy(mapped_data, &view_projection_matrix, sizeof(glm::mat4));
 
         _constant_buffer->Unmap(0, &constant_buffer_range);
 
@@ -379,7 +380,8 @@ namespace d3d12_mesh_shaders {
         _command_list->DispatchMesh(1, 1, 1);
     }
 
-    engine::engine(bool debug_mode, uint32_t width, uint32_t height) noexcept {
+    engine::engine(bool debug_mode, uint32_t width, uint32_t height) noexcept
+        : _camera(glm::vec3(0.0f), glm::vec3(0.0f)) {
         _debug_mode = debug_mode;
         _width = width;
         _height = height;
@@ -414,9 +416,16 @@ namespace d3d12_mesh_shaders {
         SDL_Event ev;
 
         while(running) {
+            SDL_ShowCursor(SDL_DISABLE);
+            SDL_SetWindowGrab(_window, SDL_TRUE);
+            SDL_SetRelativeMouseMode(SDL_TRUE);
+
             while(SDL_PollEvent(&ev)) {
                 if(ev.type == SDL_QUIT) {
                     running = false;
+                }
+                if(ev.type == SDL_MOUSEMOTION) {
+                    _camera.move_mouse(ev.motion.xrel, ev.motion.yrel);
                 }
             }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "camera.hpp"
+
 #include <SDL2/SDL.h>
 
 #include <dxgi1_6.h>
@@ -55,6 +57,8 @@ namespace d3d12_mesh_shaders {
 
         ID3D12RootSignature* _root_signature;
         ID3D12PipelineState* _pipeline_state;
+
+        camera _camera;
 
         bool _debug_mode;
         uint32_t _width, _height;

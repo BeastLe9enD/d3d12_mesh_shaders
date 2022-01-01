@@ -8,7 +8,7 @@ struct MSOutput {
 };
 
 cbuffer CameraConstants : register(b0) {
-    float4x4 ViewProjectionMatrix;
+    column_major float4x4 ViewProjectionMatrix;
 }
 
 [NumThreads(1, 1, 1)]
