@@ -281,7 +281,7 @@ namespace d3d12_mesh_shaders {
         pipeline_state_stream.depth_stencil.value = {
             .DepthEnable = true,
             .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-            .DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS
+            .DepthFunc = D3D12_COMPARISON_FUNC_GREATER
         };
         pipeline_state_stream.depth_stencil_format.value = DXGI_FORMAT_D32_FLOAT;
 
