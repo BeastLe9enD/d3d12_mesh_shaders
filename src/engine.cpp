@@ -1,5 +1,6 @@
 #include "engine.hpp"
 #include "util.hpp"
+#include "mesh.hpp"
 
 #include <SDL2/SDL_syswm.h>
 #include <DirectXColors.h>
@@ -81,7 +82,7 @@ namespace d3d12_mesh_shaders {
         _dsv_descriptor_heap_start_cpu = _dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
         _dsv_descriptor_increment_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
-        _cbv_srv_uav_descriptor_heap = util::create_descriptor_heap(_device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+        _cbv_srv_uav_descriptor_heap = util::create_descriptor_heap(_device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4);
         _cbv_srv_uav_descriptor_heap_start_cpu = _cbv_srv_uav_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
         _cbv_srv_uav_descriptor_increment_size = _device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -220,6 +221,35 @@ namespace d3d12_mesh_shaders {
         _constant_buffer->Release();
     }
 
+    void engine::init_mesh() noexcept {
+        mesh current_mesh("dragon.obj");
+
+        _model_vertices_uav.ptr = _cbv_srv_uav_descriptor_heap_start_cpu.ptr + _cbv_srv_uav_descriptor_increment_size;
+        util::create_device_buffer_and_uav(_device, _direct_queue, _allocator, current_mesh.get_vertices().data(), current_mesh.get_vertices().size(), sizeof(mesh::vertex),
+                                           _model_vertices_uav, _model_vertices_resource, _model_vertices_allocation);
+
+        _model_meshlets_uav.ptr = _cbv_srv_uav_descriptor_heap_start_cpu.ptr + 2 * _cbv_srv_uav_descriptor_increment_size;
+        util::create_device_buffer_and_uav(_device, _direct_queue, _allocator, current_mesh.get_meshlets().data(), current_mesh.get_meshlets().size(), sizeof(mesh::meshlet),
+                                           _model_meshlets_uav, _model_meshlets_resource, _model_meshlets_allocation);
+
+        _model_meshlet_data_uav.ptr = _cbv_srv_uav_descriptor_heap_start_cpu.ptr + 3 * _cbv_srv_uav_descriptor_increment_size;
+        util::create_device_buffer_and_uav(_device, _direct_queue, _allocator, current_mesh.get_meshlet_data().data(), current_mesh.get_meshlet_data().size(), sizeof(uint32_t),
+                                           _model_meshlet_data_uav, _model_meshlet_data_resource, _model_meshlet_data_allocation);
+
+        _model_num_meshlets = static_cast<uint32_t>(current_mesh.get_meshlets().size());
+    }
+
+    void engine::destroy_mesh() noexcept {
+        _model_meshlet_data_allocation->Release();
+        _model_meshlet_data_resource->Release();
+
+        _model_meshlets_allocation->Release();
+        _model_meshlets_resource->Release();
+
+        _model_vertices_allocation->Release();
+        _model_vertices_resource->Release();
+    }
+
     void engine::init_mesh_shader() noexcept {
         std::array<D3D12_ROOT_PARAMETER1, 1> root_parameters = {
             D3D12_ROOT_PARAMETER1 {
@@ -340,7 +370,7 @@ namespace d3d12_mesh_shaders {
     }
 
     void engine::run_frame_inner(uint32_t index) noexcept {
-        _camera.update(0.001f, _width, _height);
+        _camera.update(0.0003f, _width, _height);
 
         D3D12_RECT clear_rect = { .right = static_cast<LONG>(_width), .bottom = static_cast<LONG>(_height) };
         _command_list->ClearRenderTargetView(_swap_chain_rtvs[index], DirectX::Colors::CornflowerBlue, 1, &clear_rect);
@@ -392,6 +422,7 @@ namespace d3d12_mesh_shaders {
         init_depth_texture();
         init_constant_buffer();
 
+        init_mesh();
         init_mesh_shader();
     }
 
@@ -402,6 +433,7 @@ namespace d3d12_mesh_shaders {
         }
 
         destroy_mesh_shader();
+        destroy_mesh();
 
         destroy_constant_buffer();
         destroy_depth_texture();

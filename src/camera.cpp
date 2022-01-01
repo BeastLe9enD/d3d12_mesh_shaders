@@ -59,7 +59,7 @@ namespace d3d12_mesh_shaders {
 
         const auto move_position = delta_position * glm::vec2(_SENSITIVITY_X, _SENSITIVITY_Y) * 0.0073f;
 
-        _rotation.x += move_position.x;
+        _rotation.x -= move_position.x;
         if(_rotation.x > glm::two_pi<float>()) _rotation.x = 0.0f;
         else if(_rotation.x < 0.0f) _rotation.x = glm::two_pi<float>();
 

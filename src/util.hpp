@@ -1,6 +1,7 @@
 #pragma once
 
 #include <d3d12.h>
+#include <D3D12MemAlloc/D3D12MemAlloc.h>
 #include <glm/glm.hpp>
 
 #include <vector>
@@ -24,6 +25,11 @@ namespace d3d12_mesh_shaders {
         ID3D12GraphicsCommandList6* create_command_list(ID3D12Device8* device, D3D12_COMMAND_LIST_TYPE type) noexcept;
         ID3D12Fence1* create_fence(ID3D12Device8* device, uint64_t initial_value, HANDLE& event, D3D12_FENCE_FLAGS flags = D3D12_FENCE_FLAG_NONE) noexcept;
         ID3D12DescriptorHeap* create_descriptor_heap(ID3D12Device8* device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t num_descriptors) noexcept;
+        void create_device_local_buffer(ID3D12Device8* device, ID3D12CommandQueue* command_queue, D3D12MA::Allocator* allocator, const void* data, size_t size,
+                                        D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES resource_states, ID3D12Resource2*& resource, D3D12MA::Allocation*& allocation) noexcept;
+        void create_uav_for_buffer(ID3D12Device8* device, ID3D12Resource2* resource, size_t num_elements, size_t stride, D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle) noexcept;
+        void create_device_buffer_and_uav(ID3D12Device8* device, ID3D12CommandQueue* command_queue, D3D12MA::Allocator* allocator, const void* data, size_t num_elements, size_t stride,
+                                   D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle, ID3D12Resource2*& resource, D3D12MA::Allocation*& allocation) noexcept;
 
         std::vector<int8_t> read_binary_file(const std::string_view& path) noexcept;
 

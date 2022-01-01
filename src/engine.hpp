@@ -58,6 +58,20 @@ namespace d3d12_mesh_shaders {
         ID3D12RootSignature* _root_signature;
         ID3D12PipelineState* _pipeline_state;
 
+        ID3D12Resource2* _model_vertices_resource;
+        D3D12MA::Allocation* _model_vertices_allocation;
+        D3D12_CPU_DESCRIPTOR_HANDLE _model_vertices_uav;
+
+        ID3D12Resource2* _model_meshlets_resource;
+        D3D12MA::Allocation* _model_meshlets_allocation;
+        D3D12_CPU_DESCRIPTOR_HANDLE _model_meshlets_uav;
+
+        ID3D12Resource2* _model_meshlet_data_resource;
+        D3D12MA::Allocation* _model_meshlet_data_allocation;
+        D3D12_CPU_DESCRIPTOR_HANDLE _model_meshlet_data_uav;
+
+        uint32_t _model_num_meshlets;
+
         camera _camera;
 
         bool _debug_mode;
@@ -74,6 +88,9 @@ namespace d3d12_mesh_shaders {
 
         void init_constant_buffer() noexcept;
         void destroy_constant_buffer() noexcept;
+
+        void init_mesh() noexcept;
+        void destroy_mesh() noexcept;
 
         void init_mesh_shader() noexcept;
         void destroy_mesh_shader() noexcept;
